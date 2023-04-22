@@ -1,0 +1,1 @@
+GGST rich presence for Discord via memory reading
