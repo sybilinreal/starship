@@ -23,7 +23,7 @@ pub fn init() -> HashMap<String, HashMap<String, bool>> {
     println!("loading config");
 	match File::open("config.ini") {
 		Ok(_) => {}
-		Err(e) => {
+		Err(_) => {
 			println!("config not found; creating ./config.ini");
 
 			match write("config.ini", "[Config]\ndebug = false\nshow_names = true") {

@@ -188,6 +188,7 @@ fn gen_presence_from_memory(ggst: &Process, prev_gamemode: u8) -> Option<(ds::ac
 
 			// normal match - check for online/offline here
 			else {
+				// online flag is invalid - generic for now
 				// actually playing
 				// if is_online {
 				// 	// spectator
@@ -203,8 +204,7 @@ fn gen_presence_from_memory(ggst: &Process, prev_gamemode: u8) -> Option<(ds::ac
 				// }
 				// else { ("In an offline match", vs_string(p1_char, p2_char), true) }
 
-				// online flag is invalid - generic for now
-				("In an match", vs_string(p1_char, p2_char), true)
+				("In a match", vs_string(p1_char, p2_char), true)
 			}
 		},
 
