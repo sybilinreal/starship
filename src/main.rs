@@ -1,12 +1,15 @@
 use memory_rs::external::process::*;
 use std::{
-	env,
+	collections::HashMap,
 	thread::sleep,
 	time::{Duration, Instant, SystemTime},
 	//string
 };
-use discord::ds;
+
 mod discord;
+use discord::ds;
+
+mod config;
 
 const VERSION: Option<&str> = option_env!("CARGO_PKG_VERSION");
 
@@ -189,6 +192,7 @@ fn gen_presence_from_memory(ggst: &Process, prev_gamemode: u8) -> Option<(ds::ac
 				// if is_online {
 				// 	// spectator
 				// 	if p_side == 2 { ("Watching a match", vs_string(p1_char, p2_char), true) }
+				// add config check for show_names here
 				// 	// determine which player is p1 and p2
 				// 		else { let (p1_name, p2_name) =
 				// 			if p_side == 0 { (name_self, name_opponent) }
@@ -227,7 +231,7 @@ fn gen_presence_from_memory(ggst: &Process, prev_gamemode: u8) -> Option<(ds::ac
 	};
 
 	let assets = ds::activity::Assets::default()
-	.large("bridget-623p", Some(format!("Starship v{}", VERSION.unwrap_or("unknown"))))
+	.large("bridget-623p", Some(format!("Starship v{}", VERSION.unwrap_or("?.?"))))
 	.small("ggst", Some(String::from("for Guilty Gear Strive v1.26")));
 
 	let presence = ds::activity::ActivityBuilder::new()
@@ -260,9 +264,7 @@ async fn polling_loop(ggst: &Process, client: &discord::Client) {
 				client.discord.update_activity(presence).await.unwrap();
 				tracing::debug!("updated activity");
 			},
-			None => {
-
-			}
+			None => { }
 		};
 	}
 	tracing::info!("strive closed?");
@@ -272,9 +274,13 @@ async fn polling_loop(ggst: &Process, client: &discord::Client) {
 
 #[tokio::main]
 async fn main() {
-	let args: Vec<String> = env::args().collect();
-	let trace_level = if args.iter().any(|i| i=="debug") {tracing::Level::TRACE} else {tracing::Level::ERROR};
+	println!("Starship v{}", VERSION.unwrap_or("?.?"));
 
+	let config = &config::init()["config"];
+
+	let trace_level = if config["debug"] { tracing::Level::TRACE } else { tracing::Level::ERROR };
+	// let args: Vec<String> = env::args().collect();
+	// let trace_level = if args.iter().any(|i| i=="debug") {tracing::Level::TRACE} else {tracing::Level::ERROR};
 	tracing_subscriber::fmt()
         .compact()
         .with_max_level(trace_level)
@@ -290,5 +296,5 @@ async fn main() {
 		let client = discord::make_client(subs).await;
 
 		polling_loop(&ggst, &client).await;
-	}
+	};
 }
