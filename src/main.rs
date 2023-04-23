@@ -148,7 +148,7 @@ fn gen_presence_from_memory(ggst: &Process, prev_gamemode: u8) -> Option<(ds::ac
 	let       p1_char = read_value(&ggst, 0x48ab7f0);
 	let       p2_char = read_value(&ggst, 0x48ab898);
 
-	let     is_replay = read_value(&ggst, 0x44d1f20) == 2; // 1 in (offline? check) matches and 2 in replays
+	let     is_replay = read_value(&ggst, 0x44d1f20) == 2;
 	let   is_training = read_value(&ggst, 0x48ac024) == 1;
 	let     is_online = read_value(&ggst, 0x45d10bd) == 1;
 
@@ -183,18 +183,22 @@ fn gen_presence_from_memory(ggst: &Process, prev_gamemode: u8) -> Option<(ds::ac
 
 			// normal match - check for online/offline here
 			else {
-				// spectator
-				if p_side == 2 { ("Watching a match", vs_string(p1_char, p2_char), true) }
 				// actually playing
-				else if is_online {
-					// determine which player is p1 and p2
-					let (p1_name, p2_name) =
-						if p_side == 0 { (name_self, name_opponent) }
-						else { (name_opponent, name_self) };
+				// if is_online {
+				// 	// spectator
+				// 	if p_side == 2 { ("Watching a match", vs_string(p1_char, p2_char), true) }
+				// 	// determine which player is p1 and p2
+				// 		else { let (p1_name, p2_name) =
+				// 			if p_side == 0 { (name_self, name_opponent) }
+				// 			else { (name_opponent, name_self) };
 
-					("In a match", vs_string_long(p1_char, p1_name, p2_char, p2_name), true)
-				}
-				else { ("In an offline match", vs_string(p1_char, p2_char), true) }
+				// 		("In a match", vs_string_long(p1_char, p1_name, p2_char, p2_name), true)
+				// 	}
+				// }
+				// else { ("In an offline match", vs_string(p1_char, p2_char), true) }
+
+				// online flag is invalid - generic for now
+				("In an match", vs_string(p1_char, p2_char), true)
 			}
 		},
 
