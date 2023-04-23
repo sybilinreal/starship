@@ -12,8 +12,8 @@ const VERSION: Option<&str> = option_env!("CARGO_PKG_VERSION");
 
 static CHARS: [&str; 24] = [
 	"unknown",
-	"Sol", // "Sol Badguy",
-	"Ky", // "Ky Kiske",
+	"Sol Badguy",
+	"Ky Kiske",
 	"May",
 	"Axl", // "Axl Low",
 	"Chipp", // "Chipp Zanuff",
@@ -25,7 +25,7 @@ static CHARS: [&str; 24] = [
 	"Leo", // "Leo Whitefang",
 	"Nagoriyuki",
 	"Giovanna",
-	"Anji", // "Anji Mito",
+	"Anji Mito",
 	"I-No",
 	"Goldlewis", // "Goldlewis Dickison",
 	"Jack-O", // "Jack-O' Valentine",
@@ -33,7 +33,7 @@ static CHARS: [&str; 24] = [
 	"Baiken",
 	"Testament",
 	"Bridget",
-	"Sin", // "Sin Kiske",
+	"Sin Kiske",
 	"Bedman?"
 ];
 fn char_from_u8(char: u8) -> &'static str {
