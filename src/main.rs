@@ -157,6 +157,8 @@ fn gen_presence_from_memory(ggst: &Process, prev_gamemode: u8) -> Option<(ds::ac
 	let name_opponent = read_value_str(&ggst, 0x48cb226);
 	let    name_other = read_value_str(&ggst, 0x48cb710); // for spectating
 
+	let is_in_match = read_value(&ggst, 0x45d10b9) == 1; // for detecting rematch
+
 	tracing::debug!("{} {} {}({})", p1_char, p2_char, gamemode, is_training);
 	tracing::debug!("\"{}\"({}) \"{}\"({}) {} {}", name_self, name_self.len(), name_opponent, name_opponent.len(), p_side, is_online);
 	tracing::debug!("\"{}\"({})", name_other, name_other.len());
@@ -212,10 +214,13 @@ fn gen_presence_from_memory(ggst: &Process, prev_gamemode: u8) -> Option<(ds::ac
 		// 18 => { },
 
 		// win screen, main menu
-		// 29 => { },
+		29 => {
+			if is_in_match { ("In a match", String::from("Waiting to rematch..."), false) }
+			else { ("In the menus...", String::from(""), false) }
+		},
 
 		// rematch prompt
-		69 => { ("In a match", String::from("Waiting for rematch..."), true) },
+		69 => { ("In a match", String::from("Waiting to rematch..."), false) },
 
 		// unknown - assume some menu because there's a lot
 		_ => { ("In the menus...", String::from(""), false) }
