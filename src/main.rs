@@ -1,11 +1,12 @@
 use memory_rs::external::process::*;
 use std::{
+	env,
 	thread::sleep,
 	time::{Duration, Instant, SystemTime},
 	//string
 };
-mod discord;
 use discord::ds;
+mod discord;
 
 const VERSION: Option<&str> = option_env!("CARGO_PKG_VERSION");
 
@@ -143,25 +144,18 @@ fn read_value_str(ggst: &Process, addr: usize) -> String {
 }
 
 fn gen_presence_from_memory(ggst: &Process, prev_gamemode: u8) -> Option<(ds::activity::ActivityBuilder, u8)> {
-	let mut gamemode = read_value(&ggst, 0x45427f0);
-	let      p1_char = read_value(&ggst, 0x48ab7f0);
-	let      p2_char = read_value(&ggst, 0x48ab898);
-	let  is_training = read_value(&ggst, 0x48ac024);
+	let mut  gamemode = read_value(&ggst, 0x45427f0);
+	let       p1_char = read_value(&ggst, 0x48ab7f0);
+	let       p2_char = read_value(&ggst, 0x48ab898);
 
-	let       p_side = read_value(&ggst, 0x48ced90); // player side when playing online
+	let     is_replay = read_value(&ggst, 0x44d1f20) == 2; // 1 in (offline? check) matches and 2 in replays
+	let   is_training = read_value(&ggst, 0x48ac024) == 1;
+	let     is_online = read_value(&ggst, 0x45d10bd) == 1;
 
-	// experimental values
-	let is_replay = read_value(&ggst, 0x44d1f20); // or 0x44d1ef8; 1 in (offline) matches and 2 in replays
-	let is_online = read_value(&ggst, 0x45d10bd) == 1; // or 0x45d10b9
-	
-	// let alt_p1 = read_value(&ggst, 0x48adea4); // p1 selected char; might be online?
-	// let alt_p2 = read_value(&ggst, 0x43f7b48); // p2 selected char; might be for non-players, like arcade
-	// let offline = read_value(&ggst, 0x48cedd0); // maybe online match flag? inverted. 0 is online
-	// let  replay = read_value(&ggst, 0x4fc41d0); //  some sort of online match flag? also hits replays but not offline matches
-
-	let     name_self = read_value_str(&ggst, 0x4Be1dc6);
-	let name_opponent = read_value_str(&ggst, 0x48cb226); // prev 0x48d0be2
-	let name_other = read_value_str(&ggst, 0x48cb710); // maybe parks and maybe spectating?
+	let        p_side = read_value(&ggst, 0x48ced90); // player side when playing online (2 is spec)
+	let     name_self = read_value_str(&ggst, 0x4be1dc6);
+	let name_opponent = read_value_str(&ggst, 0x48cb226);
+	let    name_other = read_value_str(&ggst, 0x48cb710); // for spectating
 
 	tracing::debug!("{} {} {}({})", p1_char, p2_char, gamemode, is_training);
 	tracing::debug!("\"{}\"({}) \"{}\"({}) {} {}", name_self, name_self.len(), name_opponent, name_opponent.len(), p_side, is_online);
@@ -184,8 +178,8 @@ fn gen_presence_from_memory(ggst: &Process, prev_gamemode: u8) -> Option<(ds::ac
 		
 		// match, replays, training mode
 		5 => {
-			if is_training == 1 { ("In training mode", String::from(""), true) }
-			else if is_replay == 2 { ("Watching a replay", vs_string(p1_char, p2_char), true) }
+			if is_training { ("In training mode", String::from(""), true) }
+			else if is_replay { ("Watching a replay", vs_string(p1_char, p2_char), true) }
 
 			// normal match - check for online/offline here
 			else {
@@ -193,8 +187,11 @@ fn gen_presence_from_memory(ggst: &Process, prev_gamemode: u8) -> Option<(ds::ac
 				if p_side == 2 { ("Watching a match", vs_string(p1_char, p2_char), true) }
 				// actually playing
 				else if is_online {
-					let (p1_name, p2_name) = if p_side == 0 { (name_self, name_opponent) }
-					else { (name_opponent, name_self) };
+					// determine which player is p1 and p2
+					let (p1_name, p2_name) =
+						if p_side == 0 { (name_self, name_opponent) }
+						else { (name_opponent, name_self) };
+
 					("In a match", vs_string_long(p1_char, p1_name, p2_char, p2_name), true)
 				}
 				else { ("In an offline match", vs_string(p1_char, p2_char), true) }
@@ -207,8 +204,8 @@ fn gen_presence_from_memory(ggst: &Process, prev_gamemode: u8) -> Option<(ds::ac
 		// lobby
 		12 => { ("In a lobby", String::from(""), true) },
 
-		// something about rooms?
-		// 18 => {}
+		// something about rooms? saw while spectating; investigate
+		// 18 => { },
 
 		// win screen, main menu
 		// 29 => { },
@@ -266,9 +263,12 @@ async fn polling_loop(ggst: &Process, client: &discord::Client) {
 
 #[tokio::main]
 async fn main() {
+	let args: Vec<String> = env::args().collect();
+	let trace_level = if args.iter().any(|i| i=="debug") {tracing::Level::TRACE} else {tracing::Level::ERROR};
+
 	tracing_subscriber::fmt()
         .compact()
-        .with_max_level(tracing::Level::TRACE)
+        .with_max_level(trace_level)
         .init();
 
 	loop {
