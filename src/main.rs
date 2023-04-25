@@ -151,7 +151,7 @@ struct RefreshState {
 }
 
 fn skip_presence_update(refresh_state: &mut RefreshState, current_state: (u8, bool), p1_char: u8, p2_char: u8) -> bool {
-	println!("{} {}, {} {}", refresh_state.gamemode, refresh_state.is_in_match, current_state.0, current_state.1);
+	// println!("{} {}, {} {}", refresh_state.gamemode, refresh_state.is_in_match, current_state.0, current_state.1);
 	if p1_char == 33 || p2_char == 33 { return true; }
 	else if refresh_state.gamemode == current_state.0 && refresh_state.is_in_match == current_state.1 { return true; }
 	else  { return false; };
