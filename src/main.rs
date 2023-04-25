@@ -1,6 +1,5 @@
 use memory_rs::external::process::*;
 use std::{
-	collections::HashMap,
 	thread::sleep,
 	time::{Duration, Instant, SystemTime},
 	//string
@@ -14,7 +13,7 @@ mod config;
 const VERSION: Option<&str> = option_env!("CARGO_PKG_VERSION");
 
 static CHARS: [&str; 24] = [
-	"unknown",
+	"<unknown>",
 	"Sol Badguy",
 	"Ky Kiske",
 	"May",
@@ -146,47 +145,77 @@ fn read_value_str(ggst: &Process, addr: usize) -> String {
 	return String::from_utf16_lossy(&bytes);
 }
 
-fn gen_presence_from_memory(ggst: &Process, prev_gamemode: u8) -> Option<(ds::activity::ActivityBuilder, u8)> {
-	let mut  gamemode = read_value(&ggst, 0x45427f0);
-	let       p1_char = read_value(&ggst, 0x48ab7f0);
-	let       p2_char = read_value(&ggst, 0x48ab898);
+struct RefreshState {
+	gamemode: u8,
+	is_in_match: bool,
+	was_online: bool
+}
+
+fn gen_presence_from_memory(ggst: &Process, refresh_state: &mut RefreshState) -> Option<ds::activity::ActivityBuilder> {
+	let mut gamemode = read_value(&ggst, 0x45427f0);
+	let      p1_char = read_value(&ggst, 0x48ab7f0);
+	let      p2_char = read_value(&ggst, 0x48ab898);
 
 	let     is_replay = read_value(&ggst, 0x44d1f20) == 2;
 	let   is_training = read_value(&ggst, 0x48ac024) == 1;
-	let     is_online = read_value(&ggst, 0x45d10bd) == 1;
 
 	let        p_side = read_value(&ggst, 0x48ced90); // player side when playing online (2 is spec)
 	let     name_self = read_value_str(&ggst, 0x4be1dc6);
 	let name_opponent = read_value_str(&ggst, 0x48cb226);
 	let    name_other = read_value_str(&ggst, 0x48cb710); // for spectating
 
+	let p1_name: String;
+	let p2_name: String;
+
+	if p_side == 0 {
+		p1_name = name_self.clone();
+		p2_name = name_opponent.clone();
+	}
+	/* else if p_side == 2 { // spectator
+		// currently impossible; need a way to identify player side other than comparing with own name
+		// when this is possible it will probably involve name_other, which is the the player other than name_opponent
+	} */
+	else {
+		p1_name = name_self.clone();
+		p2_name = name_opponent.clone();
+	}
+
 	let is_in_match = read_value(&ggst, 0x45d10b9) == 1; // for detecting rematch
 
-	tracing::debug!("{} {} {}({})", p1_char, p2_char, gamemode, is_training);
-	tracing::debug!("\"{}\"({}) \"{}\"({}) {} {}", name_self, name_self.len(), name_opponent, name_opponent.len(), p_side, is_online);
-	tracing::debug!("\"{}\"({})", name_other, name_other.len());
-
-	// 6 is paused; the difference messes with the Elapsed timer
-	if gamemode == 6 { gamemode = 5 };
-
-	// if the gamemode hasn't changed then the presence shouldn't be updated
-	if gamemode == prev_gamemode { return None };
+	// cursed experimental online check
+	let online_flag = read_value(&ggst, 0x48cedd0);// or 0x45d10bd ?
 	
-	let desired_details: &str;
-	let   desired_state: String;
-	let    set_start_ts: bool;
+	let is_online: bool;
 
-	tracing::info!(gamemode);
-	(desired_details, desired_state, set_start_ts) = match gamemode {
-		// loading, title screen
-		3 => { ("Loading...", String::from(""), false) },
-		
-		// match, replays, training mode
+
+	// tracing::debug!("{} {} {}({}) {}", p1_char, p2_char, gamemode, is_training, is_in_match);
+	// tracing::debug!("\"{}\"({}) \"{}\"({}) {} {}", name_self, name_self.len(), name_opponent, name_opponent.len(), p_side, is_online);
+	// tracing::debug!("\"{}\"({})", name_other, name_other.len());
+
+	refresh_state.gamemode = gamemode;
+	refresh_state.is_in_match = is_in_match;
+
+	#[derive(Debug, PartialEq, Eq)]
+	enum GameState {
+		Unknown,
+		Menu,
+		Loading, // and title screen
+		Lobby, // room/park/tower distinction possible
+		TrainingMode,
+		Replay,
+		Match, // no online flag
+		// the following never occur for now
+		OfflineMatch,
+		OnlineMatch,
+		Paused,
+		Rematch,
+	}
+
+	let mut gamestate = match gamemode {
+		3|45 => GameState::Loading,
 		5 => {
-			if is_training { ("In training mode", String::from(""), true) }
-			else if is_replay { ("Watching a replay", vs_string(p1_char, p2_char), true) }
-
-			// normal match - check for online/offline here
+			if is_training { GameState::TrainingMode }
+			else if is_replay { GameState::Replay }
 			else {
 				// online flag is invalid - generic for now
 				// actually playing
@@ -203,32 +232,84 @@ fn gen_presence_from_memory(ggst: &Process, prev_gamemode: u8) -> Option<(ds::ac
 				// 	}
 				// }
 				// else { ("In an offline match", vs_string(p1_char, p2_char), true) }
-
-				("In a match", vs_string(p1_char, p2_char), true)
+				GameState::Match
 			}
 		},
-
-		// fishing, avatar; lobby?
-		// 9 => { },
-
-		// lobby
-		12 => { ("In a lobby", String::from(""), true) },
-
-		// something about rooms? saw while spectating; investigate
-		// 18 => { },
-
-		// win screen, main menu
-		29 => {
-			if is_in_match { ("In a match", String::from("Waiting to rematch..."), false) }
-			else { ("In the menus...", String::from(""), false) }
-		},
-
-		// rematch prompt
-		69 => { ("In a match", String::from("Waiting to rematch..."), false) },
-
-		// unknown - assume some menu because there's a lot
-		_ => { ("In the menus...", String::from(""), false) }
+		6 => GameState::Paused,
+		69 => GameState::Rematch,
+		// probably also lobby: 9, 18
+		10|12 => GameState::Lobby,
+		29|32|35|38|40|43 => GameState::Menu,
+		_ => GameState::Unknown
 	};
+	tracing::debug!("{} GameState::{:?}", gamemode, gamestate);
+
+	// pretends paused and rematch states are just more Match so that it does not disrupt the "time elapsed" display in sets
+	if gamestate == GameState::Rematch || gamestate == GameState::Paused { gamestate = GameState::Match; };
+
+	// if the gamemode hasn't changed then the presence shouldn't be updated
+	if refresh_state.gamemode == gamemode && refresh_state.is_in_match == is_in_match { return None };
+	// tracing::debug!("refresh_state: {} {}", refresh_state.gamemode, refresh_state.is_in_match);
+	// tracing::debug!("mem: {} {}", gamemode, is_in_match);
+	
+	// Activity values
+	let desired_details: &str;
+	let   desired_state: String;
+	let    set_start_ts: bool;
+
+	(desired_details, desired_state, set_start_ts) = match gamestate {
+		GameState::Unknown      => ("unknown game state", gamemode.to_string(), false),
+		// GameState::Unknown => ("In the menus...", String::from(""), false),
+
+		GameState::Menu         => ("In the menus...", String::from(""), false),
+		GameState::Loading      => ("Loading", String::from(""), false),
+		GameState::Lobby        => ("In a lobby", String::from(""), true), // maybe include lobby info in state here - probably a config setting
+		GameState::TrainingMode => ("In training mode", String::from(""), true),
+		GameState::OfflineMatch => ("In an offline match", vs_string(p1_char, p2_char), true),
+		GameState::OnlineMatch  => ("In a match", vs_string_long(p1_char, p1_name, p2_char, p2_name), true),
+		GameState::Match        => ("In a match", vs_string(p1_char, p2_char), true),
+		GameState::Replay       => ("Watching a replay", vs_string(p1_char, p2_char), true),
+		GameState::Rematch      => ("Waiting to rematch...", String::from(""), true),
+		GameState::Paused       => ("Paused", String::from(""), true)
+	};
+
+	// (desired_details, desired_state, set_start_ts) = match gamemode {
+	// 	// loading, title screen
+	// 	3 => ("Loading...", String::from(""), false),
+		
+	// 	// match, replays, training mode
+	// 	5 => {
+	// 		if is_training { ("In training mode", String::from(""), true) }
+	// 		else if is_replay { ("Watching a replay", vs_string(p1_char, p2_char), true) }
+
+	// 		// normal match - check for online/offline here
+	// 		else {
+
+	// 			("In a match", vs_string(p1_char, p2_char), true)
+	// 		}
+	// 	},
+
+	// 	// fishing, avatar; lobby?
+	// 	// 9 => { },
+
+	// 	// lobby
+	// 	12 => ("In a lobby", String::from(""), true),
+
+	// 	// something about rooms? saw while spectating; investigate
+	// 	// 18 => { },
+
+	// 	// win screen, main menu
+	// 	29 => {
+	// 		if is_in_match { ("In a match", String::from("Waiting to rematch..."), false) }
+	// 		else { ("In the menus...", String::from(""), false) }
+	// 	},
+
+	// 	// rematch prompt
+	// 	69 => ("In a match", String::from("Waiting to rematch..."), false),
+
+	// 	// unknown - assume some menu because there's a lot
+	// 	_ => ("In the menus...", String::from(""), false)
+	// };
 
 	let assets = ds::activity::Assets::default()
 	.large("bridget-623p", Some(format!("Starship v{}", VERSION.unwrap_or("?.?"))))
@@ -241,7 +322,7 @@ fn gen_presence_from_memory(ggst: &Process, prev_gamemode: u8) -> Option<(ds::ac
 
 	let presence = if set_start_ts {presence.start_timestamp(SystemTime::now())} else {presence};
 
-	return Some((presence, gamemode));
+	return Some(presence);
 }
 
 async fn polling_loop(ggst: &Process, client: &discord::Client) {
@@ -249,7 +330,7 @@ async fn polling_loop(ggst: &Process, client: &discord::Client) {
 	let mut next_time = Instant::now() + interval;
 
 	// init value so it doesn't hit any gamemodes
-	let mut prev_gamemode: u8 = 0;
+	let mut refresh_state = RefreshState { gamemode: 0u8, is_in_match: false, was_online: false };
 
 	while is_running() {
 		// wait around so it doesn't poll really fast
@@ -257,10 +338,8 @@ async fn polling_loop(ggst: &Process, client: &discord::Client) {
 		sleep(next_time - Instant::now());
 		next_time += interval;
 
-		match gen_presence_from_memory(&ggst, prev_gamemode) {
-			Some((presence, gamemode)) => {
-				prev_gamemode = gamemode;
-
+		match gen_presence_from_memory(&ggst, &mut refresh_state) {
+			Some(presence) => {
 				client.discord.update_activity(presence).await.unwrap();
 				tracing::debug!("updated activity");
 			},
