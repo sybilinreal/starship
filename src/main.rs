@@ -206,11 +206,11 @@ fn gen_presence_from_memory(ggst: &Process, refresh_state: &mut RefreshState) ->
 		Lobby, // room/park/tower distinction possible
 		TrainingMode,
 		Replay,
-		Match, // no online flag
-		// the following never occur for now
 		OfflineMatch,
 		OnlineMatch,
-		Spectating,
+		Spectating, // might be broken
+		// the following never occur for now
+		Match, // for no online flag
 		Paused,
 		Rematch,
 	}
@@ -224,7 +224,8 @@ fn gen_presence_from_memory(ggst: &Process, refresh_state: &mut RefreshState) ->
 				if is_online && name_opponent.len() > 0 {
 					if p_side == 2 { GameState::Spectating }
 					else { GameState::OnlineMatch }
-				} else { GameState::OfflineMatch }
+				}
+				else { GameState::OfflineMatch }
 
 				// GameState::Match
 			}
@@ -259,17 +260,17 @@ fn gen_presence_from_memory(ggst: &Process, refresh_state: &mut RefreshState) ->
 	let    set_start_ts: bool;
 
 	(desired_details, desired_state, set_start_ts) = match gamestate {
-		GameState::Unknown      => ("unknown game state", gamemode.to_string(), false),
-		// GameState::Unknown => ("In the menus...", String::from(""), false),
+		//GameState::Unknown      => ("unknown game state", gamemode.to_string(), false),
 
+		GameState::Unknown      => ("In the menus...", String::from(""), false),
 		GameState::Menu         => ("In the menus...", String::from(""), false),
-		GameState::Loading      => ("Loading", String::from(""), false),
+		GameState::Loading      => ("Loading...", String::from(""), false),
 		GameState::Lobby        => ("In a lobby", String::from(""), true), // maybe include lobby info in state here - probably a config setting
-		GameState::TrainingMode => ("In training mode", String::from(""), true),
+		GameState::TrainingMode => ("In training mode", String::from(CHARS[p1_char as usize]), true),
 		GameState::OfflineMatch => ("In an offline match", vs_string(p1_char, p2_char), true),
 		GameState::OnlineMatch  => ("In a match", vs_string_long(p1_char, p1_name, p2_char, p2_name), true),
-		GameState::Spectating   => ("Watching a match", vs_string(p1_char, p2_char), true),
 		GameState::Match        => ("In a match", vs_string(p1_char, p2_char), true),
+		GameState::Spectating   => ("Watching a match", vs_string(p1_char, p2_char), true),
 		GameState::Replay       => ("Watching a replay", vs_string(p1_char, p2_char), true),
 		GameState::Rematch      => ("Waiting to rematch...", String::from(""), true),
 		GameState::Paused       => ("Paused", String::from(""), true)
@@ -294,7 +295,7 @@ async fn polling_loop(ggst: &Process, client: &discord::Client) {
 	let mut next_time = Instant::now() + interval;
 
 	// init value so it doesn't hit any gamemodes
-	let mut refresh_state = RefreshState { gamemode: 0u8, is_in_match: false };
+	let mut refresh_state = RefreshState { gamemode: 0, is_in_match: false };
 
 	while is_running() {
 		// wait around so it doesn't poll really fast
@@ -320,10 +321,7 @@ async fn main() {
 	println!("Starship v{}", VERSION.unwrap_or("?.?"));
 
 	let config = &config::init()["config"];
-
 	let trace_level = if config["debug"] { tracing::Level::TRACE } else { tracing::Level::ERROR };
-	// let args: Vec<String> = env::args().collect();
-	// let trace_level = if args.iter().any(|i| i=="debug") {tracing::Level::TRACE} else {tracing::Level::ERROR};
 	tracing_subscriber::fmt()
         .compact()
         .with_max_level(trace_level)
