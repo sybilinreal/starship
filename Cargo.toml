@@ -1,6 +1,6 @@
 [package]
 name = "starship"
-version = "0.1.1-dev"
+version = "0.2.0-dev"
 edition = "2021"
 license = "MIT"
 

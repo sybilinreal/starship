@@ -266,7 +266,7 @@ fn gen_presence_from_memory(ggst: &Process, refresh_state: &mut RefreshState) ->
 		GameState::Menu         => ("In the menus...", String::from(""), false),
 		GameState::Loading      => ("Loading...", String::from(""), false),
 		GameState::Lobby        => ("In a lobby", String::from(""), true), // maybe include lobby info in state here - probably a config setting
-		GameState::TrainingMode => ("In training mode", String::from(CHARS[p1_char as usize]), true),
+		GameState::TrainingMode => ("In training mode", String::from(CHARS[(p1_char as usize) + 1]), true),
 		GameState::OfflineMatch => ("In an offline match", vs_string(p1_char, p2_char), true),
 		GameState::OnlineMatch  => ("In a match", vs_string_long(p1_char, p1_name, p2_char, p2_name), true),
 		GameState::Match        => ("In a match", vs_string(p1_char, p2_char), true),
