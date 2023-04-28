@@ -210,9 +210,9 @@ fn gen_presence_from_memory(ggst: &Process, refresh_state: &mut RefreshState) ->
 		OnlineMatch,
 		Spectating, // might be broken
 		// the following never occur for now
-		Match, // for no online flag
 		Paused,
 		Rematch,
+		// Match, // backup for no online flag
 	}
 
 	let mut gamestate = match gamemode {
@@ -269,11 +269,12 @@ fn gen_presence_from_memory(ggst: &Process, refresh_state: &mut RefreshState) ->
 		GameState::TrainingMode => ("In training mode", String::from(CHARS[(p1_char as usize) + 1]), true),
 		GameState::OfflineMatch => ("In an offline match", vs_string(p1_char, p2_char), true),
 		GameState::OnlineMatch  => ("In a match", vs_string_long(p1_char, p1_name, p2_char, p2_name), true),
-		GameState::Match        => ("In a match", vs_string(p1_char, p2_char), true),
 		GameState::Spectating   => ("Watching a match", vs_string(p1_char, p2_char), true),
 		GameState::Replay       => ("Watching a replay", vs_string(p1_char, p2_char), true),
 		GameState::Rematch      => ("Waiting to rematch...", String::from(""), true),
-		GameState::Paused       => ("Paused", String::from(""), true)
+		GameState::Paused       => ("Paused", String::from(""), true),
+		GameState::CharSelect   => ("Selecting a character", String::from(""), false)
+		// GameState::Match        => ("In a match", vs_string(p1_char, p2_char), true), // backup for no online flag
 	};
 
 	let assets = ds::activity::Assets::default()
