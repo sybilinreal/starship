@@ -158,12 +158,14 @@ fn skip_presence_update(refresh_state: &mut RefreshState, current_state: (u8, bo
 }
 
 fn gen_presence_from_memory(ggst: &Process, refresh_state: &mut RefreshState) -> Option<ds::activity::ActivityBuilder> {
-	let     gamemode = read_value(&ggst, 0x45427f0);
-	let      p1_char = read_value(&ggst, 0x48ab7f0);
-	let      p2_char = read_value(&ggst, 0x48ab898);
-
+	let true_gamemode = read_value(&ggst, 0x45427f0);
+	let mut  gamemode = true_gamemode;
+	
 	let     is_replay = read_value(&ggst, 0x44d1f20) == 2;
 	let   is_training = read_value(&ggst, 0x48ac024) == 1;
+
+	let       p1_char = read_value(&ggst, 0x48ab7f0);
+	let       p2_char = read_value(&ggst, 0x48ab898);
 
 	let        p_side = read_value(&ggst, 0x48ced90); // player side when playing online (2 is spec)
 	let     name_self = read_value_str(&ggst, 0x4be1dc6);
@@ -203,6 +205,7 @@ fn gen_presence_from_memory(ggst: &Process, refresh_state: &mut RefreshState) ->
 		Unknown,
 		Menu,
 		Loading, // and title screen
+		CharSelect,
 		Lobby, // room/park/tower distinction possible
 		TrainingMode,
 		Replay,
@@ -231,7 +234,6 @@ fn gen_presence_from_memory(ggst: &Process, refresh_state: &mut RefreshState) ->
 			}
 		},
 		6 => GameState::Paused,
-		69 => GameState::Rematch,
 		// probably also lobby: 9, 18
 		10|12 => GameState::Lobby,
 		29 => {
@@ -239,12 +241,19 @@ fn gen_presence_from_memory(ggst: &Process, refresh_state: &mut RefreshState) ->
 			else { GameState::Menu }
 		},
 		32|35|38|40|43 => GameState::Menu,
+		39 => GameState::CharSelect,
+		69 => GameState::Rematch,
 		_ => GameState::Unknown
 	};
 	tracing::debug!("{} GameState::{:?}", gamemode, gamestate);
 
-	// pretends paused and rematch states are just more Match so that it does not disrupt the "time elapsed" display in sets
-	if gamestate == GameState::Rematch || gamestate == GameState::Paused { gamestate = GameState::Match; };
+	// pretends paused and rematch states are not unique so that it does not disrupt the "time elapsed" display in sets
+	if gamestate == GameState::Rematch || gamestate == GameState::Paused {
+		gamemode = 5;
+		if is_training { gamestate = GameState::TrainingMode; }
+		else if is_replay { gamestate = GameState::Replay; }
+		else { gamestate = GameState::OfflineMatch; }
+	};
 
 	// if the gamemode hasn't changed then the presence shouldn't be updated
 	// tracing::debug!("refresh_state: {} {}", refresh_state.gamemode, refresh_state.is_in_match);
