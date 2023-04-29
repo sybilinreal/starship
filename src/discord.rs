@@ -19,7 +19,8 @@ pub async fn make_client(subs: ds::Subscriptions) -> Client {
     let discord = ds::Discord::new(ds::DiscordApp::PlainId(APP_ID), subs, Box::new(handler))
         .expect("unable to create discord client");
 
-    tracing::info!("waiting for handshake");
+    println!("connecting to discord...");
+    // tracing::info!("waiting for handshake");
     user.0.changed().await.unwrap();
 
     let user = match &*user.0.borrow() {
@@ -27,7 +28,8 @@ pub async fn make_client(subs: ds::Subscriptions) -> Client {
         ds::wheel::UserState::Disconnected(err) => panic!("failed to connect to Discord: {}", err)
     };
 
-    tracing::info!("connected to discord; user is {}#{:0>4}", user.username, user.discriminator.unwrap_or(0));
+    println!("done"); // connected
+    tracing::info!("discord user is {}#{:0>4}", user.username, user.discriminator.unwrap_or(0));
 
     Client {
         discord,

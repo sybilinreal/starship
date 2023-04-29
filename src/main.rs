@@ -304,8 +304,8 @@ async fn polling_loop(ggst: &Process, client: &discord::Client) {
 	let interval = Duration::from_secs(5);
 	let mut next_time = Instant::now() + interval;
 
-	// init value so it doesn't hit any gamemodes
-	let mut refresh_state = RefreshState { gamemode: 0, is_in_match: false };
+	// init value so it doesn't hit any real gamemodes (hopefully)
+	let mut refresh_state = RefreshState { gamemode: 255, is_in_match: true };
 
 	while is_running() {
 		// wait around so it doesn't poll really fast
@@ -338,13 +338,13 @@ async fn main() {
         .init();
 
 	loop {
-		wait_for_launch();
-		
-		let ggst = Process::new("GGST-Win64-Shipping.exe").unwrap();
-
 		let mut subs = ds::Subscriptions::empty();
 		subs.toggle(ds::Subscriptions::ACTIVITY);
 		let client = discord::make_client(subs).await;
+
+		wait_for_launch();
+
+		let ggst = Process::new("GGST-Win64-Shipping.exe").unwrap();
 
 		polling_loop(&ggst, &client).await;
 	};
