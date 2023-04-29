@@ -152,28 +152,33 @@ struct RefreshState {
 
 fn skip_presence_update(refresh_state: &mut RefreshState, current_state: (u8, bool), p1_char: u8, p2_char: u8) -> bool {
 	// println!("{} {}, {} {}", refresh_state.gamemode, refresh_state.is_in_match, current_state.0, current_state.1);
-	if p1_char == 33 || p2_char == 33 { return true; }
-	else if refresh_state.gamemode == current_state.0 && refresh_state.is_in_match == current_state.1 { return true; }
-	else  { return false; };
+	if current_state.0 == 5 && (p1_char == 33 || p2_char == 33) { return true }
+	else if refresh_state.gamemode == current_state.0 && refresh_state.is_in_match == current_state.1 { return true }
+	else { return false }
 }
 
 fn gen_presence_from_memory(ggst: &Process, refresh_state: &mut RefreshState) -> Option<ds::activity::ActivityBuilder> {
 	let true_gamemode = read_value(&ggst, 0x45427f0);
 	let mut  gamemode = true_gamemode;
 	
+	// for gamemode 5
 	let     is_replay = read_value(&ggst, 0x44d1f20) == 2;
 	let   is_training = read_value(&ggst, 0x48ac024) == 1;
 
 	let       p1_char = read_value(&ggst, 0x48ab7f0);
 	let       p2_char = read_value(&ggst, 0x48ab898);
 
-	let        p_side = read_value(&ggst, 0x48ced90); // player side when playing online (2 is spec)
+	// for online play
+	let        p_side:u8 = read_value(&ggst, 0x48ced90); // player side when playing online (2 is spec)
 	let     name_self = read_value_str(&ggst, 0x4be1dc6);
 	let name_opponent = read_value_str(&ggst, 0x48cb226);
 	let    name_other = read_value_str(&ggst, 0x48cb710); // for spectating
 
 	let p1_name: String;
 	let p2_name: String;
+
+	// for title screen
+	let is_title = read_value(&ggst, 0x4dba9f4) != 0;
 
 	tracing::debug!("P{}: {}({}) {}({}) {}({})", p_side+1, name_self, name_self.len(), name_opponent, name_opponent.len(), name_other, name_other.len());
 	if p_side == 0 {
@@ -203,8 +208,9 @@ fn gen_presence_from_memory(ggst: &Process, refresh_state: &mut RefreshState) ->
 	#[derive(Debug, PartialEq, Eq)]
 	enum GameState {
 		Unknown,
+		Title,
+		Loading,
 		Menu,
-		Loading, // and title screen
 		CharSelect,
 		Lobby, // room/park/tower distinction possible
 		TrainingMode,
@@ -219,7 +225,10 @@ fn gen_presence_from_memory(ggst: &Process, refresh_state: &mut RefreshState) ->
 	}
 
 	let mut gamestate = match gamemode {
-		3|45 => GameState::Loading,
+		3|45 => {
+			if is_title { GameState::Title }
+			else { GameState::Loading }
+		},
 		5 => {
 			if is_training { GameState::TrainingMode }
 			else if is_replay { GameState::Replay }
@@ -272,8 +281,9 @@ fn gen_presence_from_memory(ggst: &Process, refresh_state: &mut RefreshState) ->
 		//GameState::Unknown      => ("unknown game state", gamemode.to_string(), false),
 
 		GameState::Unknown      => ("In the menus...", String::from(""), false),
-		GameState::Menu         => ("In the menus...", String::from(""), false),
+		GameState::Title        => ("Title screen", String::from(""), false),
 		GameState::Loading      => ("Loading...", String::from(""), false),
+		GameState::Menu         => ("In the menus...", String::from(""), false),
 		GameState::Lobby        => ("In a lobby", String::from(""), true), // maybe include lobby info in state here - probably a config setting
 		GameState::TrainingMode => ("In training mode", String::from(CHARS[(p1_char as usize) + 1]), true),
 		GameState::OfflineMatch => ("In an offline match", vs_string(p1_char, p2_char), true),
